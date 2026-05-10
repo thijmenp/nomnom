@@ -1,10 +1,40 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import Polaroid from './Polaroid.vue'
-import { photoUrl, type Spot } from '../api/spots'
+import { deleteSpot, photoUrl, type Spot } from '../api/spots'
 import { KIND_META } from '../data/spots'
 
 const props = defineProps<{ spot: Spot }>()
-const emit  = defineEmits<{ back: [] }>()
+const emit  = defineEmits<{ back: []; deleted: [] }>()
+
+const confirming = ref(false)
+const deleting   = ref(false)
+const deleteError = ref<string | null>(null)
+let resetTimer: ReturnType<typeof setTimeout> | null = null
+
+function requestDelete() {
+  if (!confirming.value) {
+    confirming.value = true
+    resetTimer = setTimeout(() => { confirming.value = false }, 3000)
+    return
+  }
+  if (resetTimer) clearTimeout(resetTimer)
+  performDelete()
+}
+
+async function performDelete() {
+  deleting.value = true
+  deleteError.value = null
+  try {
+    await deleteSpot(props.spot.id)
+    emit('deleted')
+  } catch {
+    deleteError.value = 'Could not delete — please try again.'
+    confirming.value = false
+  } finally {
+    deleting.value = false
+  }
+}
 
 function ratingParts(r: number) {
   const [w, f] = r.toFixed(1).split('.')
@@ -142,6 +172,24 @@ function formatDate(iso: string): string {
       <!-- Going back stamp -->
       <div v-if="spot.returnable" class="flex justify-center mt-4 mb-2">
         <span class="stamp" style="transform: rotate(-4deg);">✓ Going Back</span>
+      </div>
+
+      <!-- Delete -->
+      <div class="mt-10 mb-2 border-t border-rule pt-6 flex flex-col items-center gap-2">
+        <button
+          @click="requestDelete"
+          :disabled="deleting"
+          class="font-mono text-[10px] uppercase tracking-[1.2px] border rounded-[3px] px-4 py-2 cursor-pointer transition-colors disabled:opacity-40"
+          :class="confirming
+            ? 'bg-paprika text-paper border-paprika'
+            : 'bg-transparent text-cocoa-400 border-rule hover:text-paprika hover:border-paprika'"
+        >
+          {{ deleting ? 'Deleting…' : confirming ? 'Tap again to delete' : 'Delete entry' }}
+        </button>
+        <div v-if="deleteError" class="font-display italic text-[13px] text-paprika">{{ deleteError }}</div>
+        <div v-if="confirming && !deleting" class="font-display italic text-[12px] text-cocoa-400">
+          This cannot be undone
+        </div>
       </div>
 
     </div>

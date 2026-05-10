@@ -63,6 +63,11 @@ export async function fetchSpots(kind?: Kind): Promise<Spot[]> {
   return data.map(normalise)
 }
 
+export async function deleteSpot(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/spots/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Failed to delete spot (${res.status})`)
+}
+
 export async function createSpot(payload: CreateSpotPayload): Promise<Spot> {
   const res = await fetch(`${BASE}/api/spots`, {
     method: 'POST',

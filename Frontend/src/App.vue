@@ -13,8 +13,11 @@ type Tab = 'feed' | 'map' | 'add' | 'lists' | 'profile'
 const activeTab    = ref<Tab>('feed')
 const selectedSpot = ref<Spot | null>(null)
 
+const feedKey = ref(0)
+
 function openSpot(spot: Spot) { selectedSpot.value = spot }
 function closeSpot()          { selectedSpot.value = null }
+function onDeleted()          { selectedSpot.value = null; feedKey.value++ }
 
 const screens: Record<Tab, { title: string; sub: string }> = {
   feed:    { title: 'NomNom',       sub: 'a personal log of meals worth remembering' },
@@ -27,9 +30,9 @@ const screens: Record<Tab, { title: string; sub: string }> = {
 
 <template>
   <AppShell v-model="activeTab">
-    <DetailScreen v-if="selectedSpot" :spot="selectedSpot" @back="closeSpot" />
+    <DetailScreen v-if="selectedSpot" :spot="selectedSpot" @back="closeSpot" @deleted="onDeleted" />
     <template v-else>
-      <FeedScreen v-if="activeTab === 'feed'" @open="openSpot" />
+      <FeedScreen v-if="activeTab === 'feed'" :key="feedKey" @open="openSpot" />
       <AddScreen v-else-if="activeTab === 'add'" @cancel="activeTab = 'feed'" @saved="activeTab = 'feed'" />
       <CollectionsScreen v-else-if="activeTab === 'lists'" />
       <ProfileScreen v-else-if="activeTab === 'profile'" />
