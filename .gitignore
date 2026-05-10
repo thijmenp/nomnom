@@ -1,0 +1,7 @@
+.env
+
+# Build outputs
+Backend/**/bin/
+Backend/**/obj/
+Frontend/node_modules/
+Frontend/dist/
