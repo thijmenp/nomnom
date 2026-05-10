@@ -15,6 +15,7 @@ public class UploadsController(UploadDirectory uploads) : ControllerBase
         ["image/png"]  = ".png",
         ["image/webp"] = ".webp",
         ["image/heic"] = ".heic",
+        ["image/heif"] = ".heic",
     };
 
     [HttpPost]

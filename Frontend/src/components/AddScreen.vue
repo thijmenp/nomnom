@@ -95,15 +95,40 @@ onMounted(async () => {
   }
 })
 
-async function onFileSelected(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
+function normaliseImage(file: File): Promise<File> {
+  if (!file.type.match(/^image\/hei[cf]/i)) return Promise.resolve(file)
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      canvas.getContext('2d')!.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(
+        blob => resolve(blob
+          ? new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' })
+          : file
+        ),
+        'image/jpeg', 0.9
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
 
-  photoPreview.value = URL.createObjectURL(file)
+async function onFileSelected(event: Event) {
+  const raw = (event.target as HTMLInputElement).files?.[0]
+  if (!raw) return
+
   uploading.value = true
   error.value = null
 
   try {
+    const file = await normaliseImage(raw)
+    photoPreview.value = URL.createObjectURL(file)
     photoPath.value = await uploadPhoto(file)
   } catch {
     error.value = 'Photo upload failed — you can still save without one.'
