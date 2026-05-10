@@ -2,10 +2,46 @@
 import { ref } from 'vue'
 import Polaroid from './Polaroid.vue'
 import { deleteSpot, photoUrl, type Spot } from '../api/spots'
+import { fetchCollections, addSpotToCollection, type Collection } from '../api/collections'
 import { KIND_META } from '../data/spots'
 
 const props = defineProps<{ spot: Spot }>()
 const emit  = defineEmits<{ back: []; deleted: [] }>()
+
+// ── Save-to-collection sheet ──────────────────────────────────
+const sheetOpen        = ref(false)
+const sheetLoading     = ref(false)
+const sheetError       = ref<string | null>(null)
+const sheetCollections = ref<Collection[]>([])
+const addedIds         = ref<number[]>([])
+
+async function openSheet() {
+  sheetOpen.value    = true
+  sheetLoading.value = true
+  sheetError.value   = null
+  try {
+    sheetCollections.value = await fetchCollections()
+  } catch {
+    sheetError.value = 'Could not load collections.'
+  } finally {
+    sheetLoading.value = false
+  }
+}
+
+function closeSheet() {
+  sheetOpen.value = false
+  addedIds.value  = []
+}
+
+async function saveToCollection(collection: Collection) {
+  try {
+    await addSpotToCollection(collection.id, props.spot.id)
+    if (!addedIds.value.includes(collection.id))
+      addedIds.value = [...addedIds.value, collection.id]
+  } catch {
+    // non-blocking — user can retry
+  }
+}
 
 const confirming = ref(false)
 const deleting   = ref(false)
@@ -74,10 +110,15 @@ function formatDate(iso: string): string {
         </svg>
       </button>
 
-      <!-- Entry number -->
-      <div class="absolute top-4 right-4 font-mono text-[10px] uppercase tracking-[1.2px]" style="color: rgba(251,247,238,0.85);">
-        Entry № {{ String(spot.id).padStart(3, '0') }}
-      </div>
+      <!-- Save to collection -->
+      <button
+        @click="openSheet"
+        class="absolute top-3.5 right-4 z-10 w-9 h-9 rounded-full bg-paper/90 border-none flex items-center justify-center cursor-pointer shadow-fab"
+      >
+        <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+          <path d="M1 1h12v13.5l-6-3.5-6 3.5V1z" stroke="#2A1F18" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+      </button>
 
       <!-- Polaroid stack peeking from bottom -->
       <div class="absolute left-1/2 -translate-x-1/2 flex" style="bottom: -30px;">
@@ -194,4 +235,84 @@ function formatDate(iso: string): string {
 
     </div>
   </div>
+
+  <!-- ── Save-to-collection sheet ──────────────────────────── -->
+  <Teleport to="body">
+    <Transition name="sheet">
+      <div
+        v-if="sheetOpen"
+        class="fixed inset-0 z-50 flex flex-col justify-end"
+        style="background: rgba(30,20,10,0.45);"
+        @click.self="closeSheet"
+      >
+        <div class="bg-paper rounded-t-[20px] flex flex-col" style="max-height: 70vh;">
+
+          <!-- Handle -->
+          <div class="flex justify-center pt-3 pb-1 shrink-0">
+            <div class="w-10 h-1 rounded-full bg-rule" />
+          </div>
+
+          <!-- Sheet header -->
+          <div class="flex justify-between items-center px-6 py-3 border-b border-rule shrink-0">
+            <div class="caption">Save to collection</div>
+            <button
+              @click="closeSheet"
+              class="font-display italic text-[15px] text-cocoa-500 bg-transparent border-none cursor-pointer"
+            >done</button>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="sheetLoading" class="py-10 text-center font-display italic text-[15px] text-cocoa-400">
+            Loading…
+          </div>
+
+          <!-- Error -->
+          <div v-else-if="sheetError" class="py-10 text-center font-display italic text-[15px] text-paprika">
+            {{ sheetError }}
+          </div>
+
+          <!-- Empty -->
+          <div v-else-if="sheetCollections.length === 0" class="py-10 text-center">
+            <div class="font-display italic text-[15px] text-cocoa-400">No collections yet.</div>
+            <div class="font-display italic text-[13px] text-cocoa-300 mt-1">Go to Collections to create one.</div>
+          </div>
+
+          <!-- Collection rows -->
+          <div v-else class="overflow-y-auto">
+            <div
+              v-for="(c, i) in sheetCollections"
+              :key="c.id"
+              class="flex items-center gap-4 px-6 py-4 cursor-pointer active:bg-paper-warm transition-colors"
+              :style="i < sheetCollections.length - 1 ? 'border-bottom: 0.5px solid rgba(60,40,20,0.1)' : ''"
+              @click="saveToCollection(c)"
+            >
+              <div class="flex-1 min-w-0">
+                <div class="font-display text-[17px] text-ink font-medium leading-tight truncate">{{ c.name }}</div>
+                <div v-if="c.subtitle" class="font-display italic text-[13px] text-cocoa-500 truncate">{{ c.subtitle }}</div>
+              </div>
+              <!-- Added checkmark -->
+              <div
+                v-if="addedIds.includes(c.id)"
+                class="w-6 h-6 rounded-full bg-ink flex items-center justify-center shrink-0"
+              >
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8l4 4 6-6" stroke="#FBF7EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <!-- Add indicator -->
+              <div v-else class="font-display italic text-[22px] text-cocoa-300 shrink-0 leading-none">+</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.sheet-enter-active, .sheet-leave-active { transition: opacity 0.2s ease; }
+.sheet-enter-active > div, .sheet-leave-active > div { transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.sheet-enter-from, .sheet-leave-to { opacity: 0; }
+.sheet-enter-from > div, .sheet-leave-to > div { transform: translateY(100%); }
+</style>
